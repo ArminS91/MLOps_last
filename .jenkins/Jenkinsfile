@@ -1,5 +1,75 @@
 pipeline {
   agent any
+
+  environment {
+    AWS_REGION   = "eu-central-1"
+    AWS_ACCOUNT_ID = "725537514809"   // replace with your AWS account ID
+    ECR_REPO_NAME = "mllast"           // replace with your repo name
+    ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    ECR_REPOSITORY = "${ECR_REGISTRY}/${ECR_REPO_NAME}:latest"
+  }
+
+  stages {
+    stage('Continuous Integration') {
+      steps {
+        echo "Linting repository"
+        echo "Running unit tests"
+      }
+    }
+
+    stage('Login to ECR') {
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                          credentialsId: 'aws-creds']]) {
+          sh '''
+            aws ecr get-login-password --region $AWS_REGION \
+              | docker login --username AWS --password-stdin $ECR_REGISTRY
+          '''
+        }
+      }
+    }
+
+    stage('Build Image') {
+      steps {
+        sh 'docker build -t $ECR_REPOSITORY .'
+      }
+    }
+
+    stage('Push Image') {
+      steps {
+        sh 'docker push $ECR_REPOSITORY'
+      }
+    }
+
+    stage('Continuous Deployment') {
+      steps {
+        sshagent(['ssh_key']) {
+          sh '''
+            ssh -o StrictHostKeyChecking=no ubuntu@35.158.102.247 '
+              cd /home/ubuntu/ &&
+              wget -O docker-compose.yml https://raw.githubusercontent.com/ArminS91/MLOps_last/refs/heads/main/docker-compose.yml &&
+              export IMAGE_NAME=$ECR_REPOSITORY &&
+              aws ecr get-login-password --region us-east-1 \
+                | docker login --username AWS --password-stdin $ECR_REGISTRY &&
+              docker compose up -d
+            '
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker system prune -f'
+    }
+  }
+}
+
+
+
+"""pipeline {
+  agent any
   environment {
     ECR_REPOSITORY = credentials('ECR_REPOSITORY')
     AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
@@ -29,7 +99,7 @@ pipeline {
     stage('Build Image') {
       steps {
         script {
-          sh 'docker build -t ${ECR_REPOSITORY}:latest .'
+          sh 'docker build -t {ECR_REPOSITORY}:latest .'
         }
 
       }
@@ -38,7 +108,7 @@ pipeline {
     stage('Push Image') {
       steps {
         script {
-          sh 'docker push ${ECR_REPOSITORY}:latest'
+          sh 'docker push {ECR_REPOSITORY}:latest'
         }
 
       }
@@ -59,3 +129,4 @@ pipeline {
     }
   }
 }
+"""
