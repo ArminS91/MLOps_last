@@ -41,23 +41,24 @@ pipeline {
       }
     }
 
-    stage('Continuous Deployment') {
-      steps {
-        sshagent(['ssh_key']) {
-          sh '''
-            ssh -o StrictHostKeyChecking=no ubuntu@35.158.102.247 '
-              cd /home/ubuntu/ &&
-              wget -O docker-compose.yml https://raw.githubusercontent.com/ArminS91/MLOps_last/refs/heads/main/docker-compose.yml &&
-              export IMAGE_NAME=${ECR_REPOSITORY} &&
-              aws ecr get-login-password --region ${AWS_REGION} \
-                | docker login --username AWS --password-stdin ${ECR_REGISTRY} &&
-              docker compose up -d
-            '
-          '''
-        }
-      }
+stage('Continuous Deployment') {
+  steps {
+    sshagent(['ssh_key']) {
+      sh """
+        ssh -o StrictHostKeyChecking=no ubuntu@35.158.102.247 "
+          cd /home/ubuntu/ &&
+          wget -O docker-compose.yml https://raw.githubusercontent.com/ArminS91/MLOps_last/refs/heads/main/docker-compose.yml &&
+          export IMAGE_NAME=${ECR_REPOSITORY} &&
+          aws ecr get-login-password --region ${AWS_REGION} \
+            | docker login --username AWS --password-stdin ${ECR_REGISTRY} &&
+          docker compose up -d
+        "
+      """
     }
   }
+
+}
+}
 
   post {
     always {
